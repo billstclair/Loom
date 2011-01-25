@@ -60,10 +60,12 @@ sub data_style_sheet
 	{
 	my $s = shift;
 
+	# LATER simplify the wallet styles a bit
+
 	return <<EOM;
 Content-type: text/css
 
-body { font-family: verdana, arial, sans-serif; font-size: 10pt; margin-left: 10px; }
+body { font-family: verdana, arial, sans-serif; font-size: 10pt; margin:auto; background:#e8f8fe; }
 div { font-size:10pt }
 p { font-size:10pt }
 h1 { font-size:12pt }
@@ -82,43 +84,34 @@ pre { font-family: verdana, arial, sans-serif; }
 .small { font-size:8pt }
 .large { font-size:12pt }
 .alarm { color:red }
-.color_heading { margin-top:12px; padding:5px; background-color:#f6e8b9; width:100% }
+.color_heading { margin-top:12px; padding:5px; background-color:#b0e0ee; width:100% }
 
-A:link, A:visited { color:#3771c8; text-decoration:none }
-A:hover { color:#3771c8; text-decoration:underline }
+A:link, A:visited { color:#0048d5; text-decoration:none }
+A:hover { color:#0000cc; text-decoration:underline }
 A:active { color:#FAD805; text-decoration:underline }
 
 A.highlight_link { color:#800000; font-weight:bold }
 
-td.wallet_bold_border,
 td.wallet_bold_clean,
-td.wallet_normal_border,
 td.wallet_normal_clean
 	{
 	font-size:10pt;
 	padding:5px;
 	vertical-align:bottom;
+	background-color:#b0e0ee;
 	}
 
-td.wallet_bold_border,
 td.wallet_bold_clean
 	{
 	font-weight:bold;
 	}
 
-td.wallet_bold_border,
-td.wallet_normal_border,
-td.wallet_small_border
-	{
-	border-bottom: solid 1px;
-	}
-
-td.wallet_small_border,
 td.wallet_small_clean
 	{
 	font-size:8pt;
 	padding:5px;
 	vertical-align:bottom;
+	background-color:#b0e0ee;
 	}
 EOM
 	}

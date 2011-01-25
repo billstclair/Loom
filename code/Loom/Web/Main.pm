@@ -2,7 +2,6 @@ package Loom::Web::Main;
 use strict;
 use Loom::Context;
 use Loom::DB::Trans;
-use Loom::DB::GNU;
 use Loom::Dttm;
 use Loom::File;
 use Loom::HTML;
@@ -12,19 +11,11 @@ use Loom::Load;
 use Loom::Random;
 use Loom::Sloop::HTTP::Parse;
 use Loom::Web::API;
+use Loom::Web::DB_Adapt;
 use Loom::Web::Login;  # LATER  need this here, or move down into Folder?
 use URI::Escape;
 
 # LATER 0325 Let's do a local install of all the prerequisite Perl modules.
-
-# LATER 0325 Let's not "use" all the modules right away here.  That way if some
-# some modules are missing the self-test will get a chance to run and report
-# them cleanly.  As it stands the code just dies if something like
-# Crypt::Rijndael is missing.
-
-# LATER 0318 object system.  Maps public object id to private archive id.
-# Interpret the private archive text according to first leg of URL path, e.g.
-# "shop", and verify that Content-type is compatible with that.  
 
 sub new
 	{
@@ -41,8 +32,19 @@ sub new
 	$s->{id} = Loom::ID->new;
 	$s->{html} = Loom::HTML->new;
 
-	# This is the database used throughout the system.
-	$s->{db} = Loom::DB::GNU->new("$s->{TOP}/data/app/loom.db");
+	# Now set up the database handle used throughout the system.  For more
+	# detail on the nature of this database see the "respond" routine below.
+
+	{
+	my $dir = Loom::File->new("$s->{TOP}/data/app"); # get the data directory
+	$dir->restrict;
+
+	my $db = Loom::DB::File->new($dir);   # wrap that inside DB layer
+	$db = Loom::DB::Trans->new($db);      # wrap that inside transaction layer
+	$db = Loom::Web::DB_Adapt->new($db);  # wrap that inside key adaptor
+
+	$s->{db} = $db;  # and that's our database handle
+	}
 
 	$s->{notify_path} = "$s->{TOP}/data/run";
 
@@ -72,6 +74,27 @@ sub new
 
 # This routine handles the entire interaction with a single client process from
 # start to finish.
+#
+# The database handle {db} provides simple "get" and "put" routines only.  This
+# allows the core logic of the system to behave as if it has exclusive control
+# of a simple key-value data store, with no other processes changing values
+# "under its feet" so to speak.
+#
+# We can maintain that illusion because, after the core logic is complete, we
+# commit the database changes with the robust "parallel update" routine
+# (Loom::File::update).  If the commit succeeds, it means that all the values
+# we originally read from the file system remained untouched by other processes
+# while we were deciding what changes to make, and all of our changes were
+# successfully written with proper locking to ensure data integrity and avoid
+# deadlock.
+#
+# If the commit fails, it means that at least one value changed under our feet
+# while we were deciding what changes to make.  In that case we loop around and
+# run the original query over again as if nothing had happened.  We keep doing
+# this until the commit finally succeeds, which the laws of probability
+# guarantee will happen eventually, even in a very busy system with several
+# processes trying to update the same things.  See the "test_file" program
+# for a very thorough stress test of this principle.
 
 sub respond
 	{
@@ -99,13 +122,13 @@ sub respond
 			$s->dispatch;  # This handles the message.
 
 			last if $s->{transaction_in_progress};  # Don't commit yet.
+
 			last if $s->{db}->commit;
 
 			# Commit failed because some data changed under our feet.
 			# Loop back around and handle the same message again.
 
-			# LATER test this point (commit failure in busy system)
-			#print "$$ commit failed, let's retry\n";
+			#print "$$ commit failed let's retry\n";
 			}
 
 		# Now that we have successfully read a message from the client, handled
@@ -127,13 +150,18 @@ sub configure
 
 	# Read the configuration parameters from the archive (in KV format).
 
+	my $top_config;
+	{
 	my $text = Loom::File->new("$s->{TOP}/data/conf/loom")->get;
-	my $config_id = Loom::KV->new->hash($text)->{config_id};
+	$top_config = Loom::KV->new->hash($text);
+	}
+
+	my $config_id = $top_config->{config_id};
 
 	$s->{config} = Loom::Context->read_kv( $s->archive_get($config_id) );
 
-	$s->set_default_config("odd_row_color","#f6e8b9");
-	$s->set_default_config("even_row_color","#ebddae");
+	$s->set_default_config("odd_row_color","#ffffff");
+	$s->set_default_config("even_row_color","#e8f8fe");
 
 	return;
 	}
@@ -191,6 +219,24 @@ sub dispatch
 
 	my $op = $s->{http}->op;
 	$s->{op} = $op;
+
+	# LATER 1205 Adapt to mobile devices by looking at the User-Agent header.
+	# For example when coming from iPhone we see something like this:
+	#
+	#   Mozilla/5.0 (iPhone; U; CPU iPhone OS 4_1 like Mac OS X; en-us)
+	#   AppleWebKit/532.9 (KHTML, like Gecko) Version/4.0.5 Mobile/8B117
+	#   Safari/6531.22.7
+	#
+	# But when coming from an ordinary browser we might see:
+	#
+	#   Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.2.12)
+	#   Gecko/20101027
+	#   Ubuntu/10.04 (lucid)
+	#   Firefox/3.6.12
+	#{
+	#my $user_agent = $s->{http}->{header}->get("User-Agent");
+	#print STDERR "user_agent=$user_agent\n";
+	#}
 
 	# Internally resolve any defined paths.
 
@@ -316,7 +362,7 @@ sub dispatch
 		{
 		$s->object("Loom::Web::Page_Archive_API",$s)->respond;
 		}
-	#elsif ($name eq "api" || $name eq "web")
+	#elsif ($name eq "trans" || $name eq "trans_web")
 	#	{
 	#	$s->do_api;
 	#	}
@@ -371,8 +417,20 @@ sub dispatch
 	return;
 	}
 
-# LATER This is disabled for now because it only makes sense after we've ported
-# the data to the new file system approach with optimistic concurrency.
+# LATER 1218 This is disabled for now because we still need to put an upper
+# bound on the memory used in a transaction.  (See Loom::DB::Trans.)
+#
+# The transactional API is:
+#
+#    /trans/begin
+#    /trans/commit
+#    /trans/cancel
+#
+# This returns results in KV format.
+#
+# You can also do transactions interactively, in HTML, by using "trans_web"
+# instead of "trans".
+
 sub do_api
 	{
 	my $s = shift;
@@ -380,7 +438,7 @@ sub do_api
 	my @path = $s->split_path($s->{http}->path);
 	my $format = shift @path;
 
-	die if $format ne "api" && $format ne "web";
+	die if $format ne "trans" && $format ne "trans_web";
 
 	my $action = shift @path;
 	$action = "" if !defined $action;
@@ -411,7 +469,7 @@ sub do_api
 		$api->put("error_action","unknown");
 		}
 
-	if ($format eq "api")
+	if ($format eq "trans")
 		{
 		# Return result in KV format.
 		my $response_code = "200 OK";
@@ -419,7 +477,7 @@ sub do_api
 		my $text = $api->write_kv;
 		$s->format_HTTP_response($response_code,$headers,$text);
 		}
-	elsif ($format eq "web")
+	elsif ($format eq "trans_web")
 		{
 		# Return result in HTML format.
 
@@ -453,9 +511,9 @@ open, you can go there and do the operations.
 When you're done, come back to this window and either commit or cancel the
 transaction.
 <p style='margin-left:20px; margin-top:30px;'>
-<a href="/web/commit"> Commit the transaction (save all changes). </a>
+<a href="/trans_web/commit"> Commit the transaction (save all changes). </a>
 <p style='margin-left:20px; margin-top:30px;'>
-<a href="/web/cancel"> Cancel the transaction (discard all changes). </a>
+<a href="/trans_web/cancel"> Cancel the transaction (discard all changes). </a>
 EOM
 			}
 		elsif ($action eq "commit")
@@ -493,7 +551,7 @@ EOM
 			{
 			$s->{body} .= <<EOM;
 <p style='margin-left:20px'>
-<a href="/web/begin"> Start a new transaction. </a>
+<a href="/trans_web/begin"> Start a new transaction. </a>
 <p style='margin-left:20px'>
 <a href="/"> Return to Home page. </a>
 EOM
@@ -671,7 +729,8 @@ sub top_navigation_bar
 
 	my $nav_message = $s->{nav_message};
 
-	my $color = $s->{config}->get("odd_row_color");
+	# LATER soft-code more colors in a single module
+	my $color = "#b0e0ee";
 
 	my $result = "";
 	$result .= <<EOM;

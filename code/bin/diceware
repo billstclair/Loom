@@ -18,42 +18,32 @@ use lib "$TOP/code";
 use Loom::Diceware;
 use Loom::Random;
 
-main->new->run(@ARGV);
+my $num_words;
 
-sub new
+main();
+
+sub main
 	{
-	my $class = shift;
-	my $s = bless({},$class);
-	return $s;
-	}
-
-sub run
-	{
-	my $s = shift;
-
-	$s->check_usage(@_);
+	check_usage();
 
 	my $random = Loom::Random->new;
-	$s->{diceware} = Loom::Diceware->new($random);
+	my $diceware = Loom::Diceware->new($random);
 
-	my $passphrase = $s->{diceware}->get($s->{count});
+	my $passphrase = $diceware->get($num_words);
 
 	print "$passphrase\n";
 	}
 
 sub check_usage
 	{
-	my $s = shift;
-	my @args = @_;
-
 	my $usage_error = 0;
 
-	my $argc = scalar(@args);
+	my $argc = scalar(@ARGV);
 
 	if ($argc == 1)
 		{
-		$s->{count} = shift @args;
-		if ($s->{count} !~ /^\d+$/)
+		$num_words = shift @ARGV;
+		if ($num_words !~ /^\d+$/)
 			{
 			$usage_error = 1;
 			}

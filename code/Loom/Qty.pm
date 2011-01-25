@@ -30,23 +30,16 @@ sub ones_complement_float
 	my $min_precision = shift;
 	my $max_precision = shift;
 
-	my $sign = "";
 	if ($value =~ /^-/)
 		{
-		$sign = "-";
-		$value = substr($value,1);
-
 		my $bv = Loom::Int128->from_dec($value);
-		my $one = Loom::Int128->from_dec("1");
-
-		$bv->subtract($one);
+		$bv->increment;
 		$value = $bv->to_dec;
+		$value = "-".$value if $value eq "0";
 		}
 
-	my $q_value =
+	return
 	$s->twos_complement_float($value,$scale,$min_precision,$max_precision);
-
-	return $sign.$q_value;
 	}
 
 # Convert integer to float.  Examples:
@@ -154,6 +147,66 @@ sub float_to_int
 	$int_rep = $sign . $int_rep;
 
 	return $int_rep;
+	}
+
+# Multiply a 128-bit integer value by a positive float value, returning a
+# 128-bit integer value.
+#
+# We use this for assessing current values of raw Loom quantities, e.g. when we
+# apply a time-based factor or a specific price factor.  These factors can be
+# arbitrary IEEE floating point values, and we need to compute the product
+# sensibly, portably, and reliably.  This is fairly tricky, but I've developed
+# a full test suite for it.
+
+sub multiply_float
+	{
+	my $s = shift;
+	my $str_val = shift;        # 128-bit integer value as decimal string
+	my $float_factor = shift;   # positive floating point number
+
+	my $float_max_factor = 1e+12;  # This seems ample and quite portable.
+
+	if ($float_factor < 0)
+		{
+		# The factor is negative, set it to 0.
+		$float_factor = 0;
+		}
+	elsif ($float_factor > $float_max_factor)
+		{
+		# The factor is too big, so clip it to the maximum.
+		$float_factor = $float_max_factor;
+		}
+
+	my $float_pow_ten = "1000000000";  # 9 places after decimal point
+	my $str_factor = sprintf("%.0f", int($float_factor * $float_pow_ten));
+
+	my $bv_val = Bit::Vector->new_Dec(256,$str_val);
+	my $bv_factor = Bit::Vector->new_Dec(256,$str_factor);
+
+	$bv_val->Multiply($bv_val,$bv_factor);
+	my $dummy_remainder = Bit::Vector->new(256);
+	my $bv_pow_ten = Bit::Vector->new_Dec(256,$float_pow_ten);
+	$bv_val->Divide($bv_val,$bv_pow_ten,$dummy_remainder);
+
+	# This interval clipping code may not be efficient, but it's reliable.
+	{
+	my $sign = $bv_val->Sign;
+
+	if ($sign > 0)
+		{
+		my $max_val = Bit::Vector->new(256);
+		$max_val->from_Dec("170141183460469231731687303715884105727");
+		$bv_val->Copy($max_val) if $bv_val->Compare($max_val) > 0;
+		}
+	elsif ($sign < 0)
+		{
+		my $min_val = Bit::Vector->new(256);
+		$min_val->from_Dec("-170141183460469231731687303715884105728");
+		$bv_val->Copy($min_val) if $bv_val->Compare($min_val) < 0;
+		}
+	}
+
+	return $bv_val->to_Dec;
 	}
 
 # Return true if the string is valid for use as a scale or min_precision

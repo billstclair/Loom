@@ -7,8 +7,6 @@ use Loom::Qty;
 use Loom::Web::EZ_Archive;
 use Loom::Web::EZ_Grid;
 
-# TODO check more LATER entries
-
 sub new
 	{
 	my $class = shift;
@@ -75,6 +73,30 @@ sub respond
 
 	if ($action ne "" && !$s->{id}->valid_id($mask))
 		{
+		# Here we take an extra measure to enable "auto-login" links.  If you
+		# click an auto-login link, it brings up a browser and attempts to
+		# login.  The problem is, if the "mask" cookie is not already set in
+		# that browser, the Loom server will think you have disabled cookies
+		# and will display an error message.  So in the case of login, we give
+		# your browser one more chance to set the cookie.
+
+		if ($action eq "login" && $op->get("repeat") eq "")
+			{
+			$s->put_mask_if_absent;
+
+			my $url = $site->url(
+				$op->slice("function","login","passphrase"),
+				"repeat" => "1",
+				);
+			$site->format_HTTP_response
+				(
+				"303 See Other",
+				"Location: $url\n",
+				"",
+				);
+			return;
+			}
+
 		$s->page_cookie_problem;
 		return;
 		}
@@ -179,7 +201,7 @@ EOM
 	push @{$site->{top_links}},
 		$site->highlight_link(
 			$site->url(function => "asset", $op->slice("session")),
-			"Asset Types",
+			"Assets",
 			$op->get("function") eq "asset" && $op->get("help") eq "",
 			"Manage asset types",
 			);
@@ -190,22 +212,6 @@ EOM
 			"Help",
 			$op->get("help") ne "",
 			);
-
-	if ($op->get("help") ne "")
-		{
-		push @{$site->{top_links}},
-			$site->highlight_link(
-				$site->url($op->slice("function","session"), help => 1,
-					print => 1),
-				"Print");
-		}
-	else
-		{
-		my $color = $site->{config}->get("odd_row_color");
-		push @{$site->{top_links}},
-			"<span style='color:$color'>Print</span>";
-		}
-
 	}
 
 	{
@@ -342,8 +348,9 @@ sub page_folder_value_table
 	$table .= <<EOM;
 <table border=0 cellpadding=2 style='border-collapse:collapse;'>
 <colgroup>
-<col width=190>
-<col width=460>
+<col width=180>
+<col width=380>
+<col width=90>
 </colgroup>
 EOM
 
@@ -353,7 +360,7 @@ EOM
 
 		$table .= <<EOM;
 <tr>
-<td colspan=2 style='border: solid 1px'>
+<td colspan=3 style='border: solid 1px'>
 <span class=alarm><b>Warning: This wallet is too big.</b></span>
 Some values may be missing from this list because you are trying to examine
 more than $scan_error_max at a time.  Please delete any unused contacts or
@@ -402,12 +409,15 @@ EOM
 			}
 
 		my $payment_dialog = "";
+		# LATER eliminate the Cash feature entirely
+		if (0)
+		{
 		$payment_dialog .= <<EOM;
 <tr>
 <td class=wallet_bold_clean align=right>
 Receive Cash:
 </td>
-<td class=wallet_bold_clean>
+<td class=wallet_bold_clean colspan=2>
 <input class=tiny_mono size=34 type=text name=received_cash_token value="">
 <input type=submit name=press_receive_cash value="Go">
 $error
@@ -415,16 +425,17 @@ $error
 </tr>
 
 <tr style='height:15px'>
-<td colspan=2>&nbsp;</td>
+<td colspan=3>&nbsp;</td>
 </tr>
 EOM
+		}
 
 		$payment_dialog .= $display->{move_dialog};
 		$table .= $payment_dialog;
 
 		$table .= <<EOM;
 <tr style='height:28px'>
-<td colspan=2>&nbsp;</td>
+<td colspan=3>&nbsp;</td>
 </tr>
 EOM
 		}
@@ -457,12 +468,14 @@ EOM
 
 	$table .= <<EOM;
 <tr>
-<td class=wallet_bold_border align=right>
+<td class=wallet_bold_clean align=right>
 Received cash:
 </td>
 
-<td class=wallet_bold_border>
+<td class=wallet_bold_clean>
 <span class=tiny_mono title="Click assets below to claim.  Received $dttm">$cash_loc</span>
+</td>
+<td class=wallet_normal_clean>
 </td>
 </tr>
 EOM
@@ -478,12 +491,14 @@ EOM
 
 	$table .= <<EOM;
 <tr>
-<td class=wallet_bold_border align=right>
+<td class=wallet_bold_clean align=right>
 Send cash to payee:
 </td>
 
-<td class=wallet_bold_border>
+<td class=wallet_bold_clean>
 <span class=tiny_mono title="Copy, paste, and send this cash token to payee.  Created $dttm">$cash_loc</span>
+</td>
+<td class=wallet_normal_clean>
 </td>
 </tr>
 EOM
@@ -492,19 +507,23 @@ EOM
 	{
 	# normal named contact
 
-	my $label = $loc eq $loc_folder ? "Your assets:" : "At contact:";
+	my $label = $loc eq $loc_folder ? "In my wallet" : "On the table";
 
 	my $q_loc_name = $s->{html}->quote($loc_name);
-	$q_loc_name =
-		qq{<a href="$url" title="View details of this contact.">$q_loc_name</a>};
+
+	my $link_view_contact =
+	qq{<a href="$url" title="View details of this contact.">View contact</a>};
 
 	$table .= <<EOM;
 <tr>
-<td class=wallet_bold_border align=right>
+<td class=wallet_bold_clean>
 $label
 </td>
-<td class=wallet_bold_border style='font-size:11pt'>
+<td class=wallet_bold_clean style='font-size:11pt'>
 $q_loc_name
+</td>
+<td class=wallet_normal_clean align=right>
+$link_view_contact
 </td>
 </tr>
 EOM
@@ -545,6 +564,8 @@ EOM
 	my $type_name = $s->map_id_to_nickname("type",$type);
 	my $q_type_name = $s->{html}->quote($type_name);
 
+	my $link_asset = "";
+
 	if ($display->{flavor} eq "move_dialog" && $loc ne $loc_folder)
 		{
 		my $url = $site->url(
@@ -556,18 +577,18 @@ EOM
 			$op->slice(qw(session)),
 			);
 
-		$q_type_name =
+		$link_asset =
 		qq{<a href="$url" title="Claim this asset as your own.">}
-		.qq{$q_type_name</a>};
+		.qq{Claim asset</a>};
 		}
 	elsif ($display->{flavor} ne "move_dialog")
 		{
 		my $url = $site->url(function => "asset",
 			name => $type_name, session => $op->get("session"));
 
-		$q_type_name =
+		$link_asset =
 		qq{<a href="$url" title="View or edit this asset.">}
-		.qq{$q_type_name</a>};
+		.qq{View asset</a>};
 		}
 
 	my $row_color = $odd_row ? $odd_color : $even_color;
@@ -583,13 +604,16 @@ $q_value
 <td$style>
 $q_type_name
 </td>
+<td align=right$style>
+$link_asset
+</td>
 </tr>
 EOM
 	}
 
 	$table .= <<EOM;
 <tr style='height:28px'>
-<td colspan=2>&nbsp;</td>
+<td colspan=3>&nbsp;</td>
 </tr>
 EOM
 	}
@@ -827,9 +851,14 @@ EOM
 		$selected = " selected";
 		}
 
+	# LATER eliminate Cash feature entirely
+	if (0)
+	{
 	$selector .= <<EOM;
 <option$selected value="&#02;">[Cash: New]</option>
 EOM
+	}
+
 	}
 
 	for my $loc (@$list_select_loc)
@@ -868,17 +897,7 @@ EOM
 
 	my $op = $site->{op};
 
-	{
-	my $loc = $op->get("loc");
-	if ($loc eq "")
-		{
-		$site->set_focus("loc");
-		}
-	else
-		{
-		$site->set_focus("qty");
-		}
-	}
+	$site->set_focus("qty");
 
 	my $out = $s->{out};
 
@@ -918,9 +937,6 @@ EOM
 			}
 		elsif ($message eq "invalid_qty")
 			{
-			# TODO 0519 I noticed if you enter a valid quantity 1.2 but don't
-			# choose an asset type, you get this message.
-
 			$message = "Not a valid quantity";
 			$site->set_focus("qty");
 			}
@@ -939,22 +955,45 @@ EOM
 	my $result = "";
 	$result .= <<EOM;
 <tr>
-<td class=wallet_bold_clean align=right>
-Pay to the Order of:
+<td class=wallet_bold_clean colspan=3>
+Send Money
+</td>
+</tr>
+
+<tr>
+<td align=right>
+<b>Quantity:</b>
 </td>
 <td>
-$loc_selector
+<input type=text size=$size name=qty value="$q_qty" style='text-align:right'>
 </td>
 </tr>
 
 <tr>
 
 <td align=right>
-<span class=small>Quantity:</span>&nbsp;<input type=text size=$size name=qty value="$q_qty" style='text-align:right'>
+<b>Asset:</b>
+</td>
+
+<td colspan=2>
+$type_selector
+</td>
+
+</tr>
+
+<tr>
+<td align=right>
+<b>Contact:</b>
+</td>
+<td colspan=2>
+$loc_selector
+</td>
+</tr>
+
+<td align=right>
 </td>
 
 <td>
-$type_selector
 <input type=submit name=give value="Pay">
 </td>
 
@@ -1188,11 +1227,18 @@ $hidden
 </div>
 </form>
 <p>
-<h1> Important Security Advice </h1>
+<table border=0 cellpadding=0 style='border-collapse:collapse'>
+<tr>
+<td colspan=2>
+<h2> Important Security Advice </h2>
+<p>
 Do not log in here unless you are certain you are at the <em>authentic</em>
 Loom site.  Some people will try to lead you to a fake Loom site and steal your
 passphrase, but you can easily protect yourself with a little discipline.
-
+</td>
+</tr>
+<tr>
+<td valign=top>
 <h2> <span style='color:green'>What you SHOULD do:</span> </h2>
 <ul>
 <li> Type "loom.cc" in the location bar of your browser and press the Enter
@@ -1206,6 +1252,8 @@ recommend that you <b>bookmark</b> that page in your browser.  That way you can
 reach it in the future with a single click.
 <li> At the secure login page, you may safely log in.
 </ul>
+</td>
+<td valign=top>
 <h2> <span style='color:red'>What you should NEVER do:</span> </h2>
 <ul>
 <li> Never log into Loom by clicking a link you found in an email, or even in
@@ -1213,6 +1261,9 @@ another web page.  The links you see in emails and other web pages could lead
 you to a fake Loom site.  If you log in at one of those fake sites, a thief
 will steal your passphrase.  You have been warned.
 </ul>
+</td>
+</tr>
+</table>
 EOM
 
 	# LATER let's rethink this.  If we are supposed to be at an https site

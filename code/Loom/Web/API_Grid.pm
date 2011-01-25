@@ -214,25 +214,15 @@ sub check_buy
 	return;
 	}
 
-# LATER 0328 In the new method, when you buy a new grid location, the usage
-# token you are charged will still be subtracted from your location, but it
-# will not be added anywhere else. This implies a slight modification of the
-# invariant on the usage token asset type. In the old method, the sum of all
-# values equals -1, for any asset type. In the new method, that still holds
-# for asset types other than usage tokens. But for usage tokens, the sum of
-# all values will equal the negative of the count  of all values. There are
-# various ways of stating this, all equivalent:
+# Note that when we charge or refund usage tokens, we don't bother moving them
+# to or from the usage token issuer location.  This would become a point of
+# contention in a busy system, with many processes trying to update the single
+# issuer location, causing many retries due to commit failures, and becoming a
+# performance bottleneck.
 #
-#   sum(usage_token_values) + count(usage_token_values)-1  = -1
-#   sum(usage_token_values) + count(usage_token_values) = 0
-#   sum(usage_token_values) = -count(usage_token_values)
-#
-# The same sort of thing applies to the usage token refund you get when selling
-# a grid location. In the old method, the usage token refund was subtracted
-# directly from the issuer location. In the new method, a usage token is
-# directly added to your location, but is not subtracted from anywhere else.
-# The new invariant is still preserved because the number of usage token values
-# in the system drops by 1 when you sell.
+# As a result of this policy, we must relax the normal constraint which demands
+# that at all times, the sum of the balances at all locations must equal -1.
+# This is no longer true of asset type zero.
 
 sub charge_usage
 	{
@@ -246,37 +236,50 @@ sub charge_usage
 	my $bv_amount = Loom::Int128->from_dec($amount);
 	die if !defined $bv_amount;
 
+	my $ok = 0;
+
 	my $usage_hash = $s->{hasher}->sha256($zero.$loc);
+	my $val_orig = $s->{db}->get("V$zero$usage_hash");
 
-	my $issuer_hash = $s->{db}->get("I$zero");
-	$issuer_hash = $s->{hasher}->sha256($zero.$zero) if $issuer_hash eq "";
-
-	my $ok;
-
-	# Save the updated usage balance.
-
-	if ($usage_hash eq $issuer_hash)
+	if ($val_orig eq "")
 		{
-		$ok = 1;
-		my $val_orig = $s->{db}->get("V$zero$usage_hash");
-		$op->put("usage_balance",$val_orig);
+		# Vacant usage location.  This is valid only if the usage location is
+		# zero and the the issuer location is null, which is effectively zero.
+
+		$ok = ($loc eq $zero && $s->{db}->get("I$zero") eq "");
 		}
 	else
 		{
-		$ok = $s->hash_move($op,$zero,$bv_amount,$usage_hash,$issuer_hash);
-		$op->put("usage_balance",$op->get("value_orig"));
+		my $bv_orig = Loom::Int128->from_dec($val_orig);
+		my $old_sign_orig = $bv_orig->sign;
+
+		if ($old_sign_orig == 0)
+			{
+			# Non-negative usage balance.  Make sure the balance is sufficient
+			# by subtracting the charge amount from it and seeing if the sign
+			# changes.
+
+			$bv_orig->subtract($bv_amount);
+			my $new_sign_orig = $bv_orig->sign;
+			$ok = ($new_sign_orig == $old_sign_orig);
+
+			if ($ok)
+				{
+				# Sign was unchanged, so update the usage balance.
+				$val_orig = $bv_orig->to_dec;
+				$s->{db}->put("V$zero$usage_hash", $val_orig);
+				}
+			}
+		else
+			{
+			# Negative usage balance.  This is the issuer location so it's OK.
+			$ok = 1;
+			}
 		}
 
-	# Now clear out the value_orig and value_dest set in the hash_move
-	# operation so we don't reveal the usage issuer balance.
+	$op->put("usage_balance",$val_orig);
 
-	$op->put("value_orig","");
-	$op->put("value_dest","");
-
-	if ($ok)
-		{
-		}
-	else
+	if (!$ok)
 		{
 		$op->put("status","fail");
 		$op->put("error_usage","insufficient");
@@ -463,9 +466,7 @@ sub do_move
 	}
 
 # We limit the size of the cross-product (locs x types) to a maximum of 2048.
-# That takes under 1 second, which is important because the database is locked
-# so we guarantee a consistent read image.  Later we will do more work on
-# minimizing locking, but for now we need to get in and get out very quickly.
+# That takes under 1 second.
 
 # LATER test scan with hashes
 # LATER put some scan regression tests in qualify

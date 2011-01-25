@@ -93,6 +93,13 @@ sub subtract
 	$s->{bv}->subtract($s->{bv}, $amount->{bv}, 0);
 	}
 
+sub increment
+	{
+	my $s = shift;
+
+	$s->{bv}->increment;
+	}
+
 return 1;
 
 __END__

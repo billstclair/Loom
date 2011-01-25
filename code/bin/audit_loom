@@ -7,33 +7,28 @@ BEGIN { $TOP = "$FindBin::RealBin/../.." }
 use lib "$TOP/code";
 
 use Getopt::Long;
-use Loom::DB::GNU;
+use Loom::File;
 use Loom::Int128;
 
-main->new->run;
+my @bad_types;
+my $num_types = 0;
+my $verbose = 0;
+my $show_subtotal = 0;
+my $data_dir;
+my $type_zero = "0" x 32;
 
-sub new
+main();
+
+sub main
 	{
-	my $class = shift;
-
-	my $s = bless({},$class);
-	return $s;
-	}
-
-sub run
-	{
-	my $s = shift;
-
-	$s->get_options;
-	$s->audit_grid;
+	get_options();
+	audit_grid();
 
 	exit(0);
 	}
 
 sub get_options
 	{
-	my $s = shift;
-
 	my $opt = {};
 	my $ok = GetOptions($opt,"l","s","h");
 
@@ -53,148 +48,34 @@ EOM
 		exit(2);
 		}
 
-	$s->{verbose} = $opt->{l} || $opt->{s};
-	$s->{show_subtotal} = $opt->{s};
+	$verbose = $opt->{l} || $opt->{s};
+	$show_subtotal = $opt->{s};
 
 	return;
 	}
 
 sub audit_grid
 	{
-	my $s = shift;
+	$data_dir = Loom::File->new("$TOP/data/app");
+	$data_dir->restrict;
 
-	my $dbname = "$TOP/data/app/loom.db";
+	print "-- balances by type\n" if $verbose;
 
-	$s->{db} = Loom::DB::GNU->new($dbname);
-	$s->{type_table} = {};
-
-	my $key = $s->{db}->first_key;
-
-	while (defined $key)
+	my $place = $data_dir->child("grid");
+	for my $leg ($place->names)
 		{
-		if ($key =~ /^grid_V/)
+		my $place = $place->child($leg);
+		for my $leg ($place->names)
 			{
-			die if length($key) != 54;
-
-			my $data = substr($key,6);
-
-			my $type = unpack("H*",substr($data,0,16));
-			my $hash = unpack("H*",substr($data,16,16));
-
-			my $val = $s->{db}->get($key);
-
-			my $o_type = $s->{type_table}->{$type};
-			if (!defined $o_type)
+			my $place = $place->child($leg);
+			for my $type ($place->names)
 				{
-				$o_type = {};
-				$o_type->{total} = Loom::Int128->from_dec("0");
-				$o_type->{list} = [];
-
-				$s->{type_table}->{$type} = $o_type;
+				check_type($place,$type);
 				}
-
-			$o_type->{total}->add(Loom::Int128->from_dec($val));
-
-			push @{$o_type->{list}}, [$hash,$val];
-			}
-
-		$key = $s->{db}->next_key($key);
-		}
-
-	# Now sort the item lists by hash.
-	for my $type (keys %{$s->{type_table}})
-		{
-		my $o_type = $s->{type_table}->{$type};
-		$o_type->{list} = [ sort { $a->[0] cmp $b->[0] } @{$o_type->{list}} ];
-		}
-
-	print "-- balances by type\n" if $s->{verbose};
-
-	my @types = sort keys %{$s->{type_table}};
-	my @bad_types;
-
-	for my $type (@types)
-		{
-		my $o_type = $s->{type_table}->{$type};
-		my $total = $o_type->{total};
-		print "\n" if $s->{verbose};
-		my $q_total = $total->to_dec;
-
-		my $b_type = pack("H*",$type);
-		my $b_issuer = $s->{db}->get("grid_I$b_type");
-		my $issuer = unpack("H*",$b_issuer);
-		my $dsp_issuer = substr($issuer,0,8);
-
-		if ($s->{verbose})
-			{
-			print "type $type issuer $dsp_issuer\n";
-
-			if ($s->{show_subtotal})
-				{
-				printf "  %-8s %20s %20s\n", "TOTAL", "", $q_total;
-				printf "  %-8s %20s %20s\n", "HASH", "VAL", "SUBTOTAL";
-				}
-			else
-				{
-				printf "  %-8s %20s\n", "HASH", "VAL";
-				}
-			}
-
-		my $subtotal = Loom::Int128->from_dec("0");
-
-		for my $item (@{$o_type->{list}})
-			{
-			my ($hash,$val) = @$item;
-			my $dsp_hash = substr($hash,0,8);
-			$subtotal->add(Loom::Int128->from_dec($val));
-
-			my $q_subtotal = $subtotal->to_dec;
-
-			if ($s->{verbose})
-				{
-				if ($s->{show_subtotal})
-					{
-					printf "  %-8s %20s %20s\n", $dsp_hash, $val, $q_subtotal;
-					}
-				else
-					{
-					printf "  %-8s %20s\n", $dsp_hash, $val;
-					}
-				}
-			}
-
-		die if $subtotal->to_dec ne $q_total;
-
-		if ($q_total eq "-1")
-			{
-			# The type totals to -1 as expected.  Let's make sure the issuer
-			# location has been bought.
-
-			if ($b_issuer eq "")
-				{
-				# ERROR: Issuer location has not been bought.
-				push @bad_types, $type;
-				}
-			}
-		elsif ($q_total eq "0")
-			{
-			# The type totals to 0.  In this case we expect that nobody has
-			# yet bought the issuer location (which is why the -1 didn't
-			# appear during the key scan).
-
-			if ($b_issuer ne "")
-				{
-				# ERROR: Issuer location has been bought, but we total to 0.
-				push @bad_types, $type;
-				}
-			}
-		else
-			{
-			push @bad_types, $type;
 			}
 		}
 
-	print "\n" if $s->{verbose};
+	print "\n" if $verbose;
 
 	if (@bad_types)
 		{
@@ -206,7 +87,112 @@ sub audit_grid
 		exit(3);
 		}
 
-	my $num_types = @types;
 	print "--- SUCCESS:  All $num_types types look good.\n";
+
 	return;
+	}
+
+sub check_type
+	{
+	my $place = shift;
+	my $type = shift;
+
+	my $issuer;
+	{
+	my $file = $place->child("$type/I");
+	$file->read;
+	$issuer = $file->get;
+	$issuer = "" if !defined $issuer;
+	}
+	my $dsp_issuer = substr($issuer,0,8);
+
+	print "\n" if $verbose;
+	if ($verbose)
+		{
+		print "type $type issuer $dsp_issuer\n";
+		}
+	$num_types++;
+
+	my $type_total = Loom::Int128->from_dec("0");
+
+	$place = $place->child("$type/V");
+	for my $leg ($place->names)
+		{
+		my $place = $place->child($leg);
+		for my $leg ($place->names)
+			{
+			my $place = $place->child($leg);
+			for my $hash ($place->names)
+				{
+				my $place = $place->child($hash);
+				$place->read;
+				my $val = $place->get;
+
+				$type_total->add(Loom::Int128->from_dec($val));
+				my $q_total = $type_total->to_dec;
+
+				my $q_hash = substr($hash,0,8);
+				if ($verbose)
+					{
+					if ($show_subtotal)
+						{
+						printf "  %-8s %20s %20s\n", $q_hash, $val, $q_total;
+						}
+					else
+						{
+						printf "  %-8s %20s\n", $q_hash, $val;
+						}
+					}
+				}
+			}
+		}
+
+	my $q_total = $type_total->to_dec;
+
+	if ($verbose)
+		{
+		if ($show_subtotal)
+			{
+			printf "  %-8s %20s %20s\n", "TOTAL", "", $q_total;
+			}
+		else
+			{
+			printf "  %-8s %20s\n", "TOTAL", $q_total;
+			}
+		}
+
+	if ($type eq $type_zero)
+		{
+		print "  (Any total is acceptable for type zero.)\n" if $verbose;
+		}
+	else
+		{
+		if ($q_total eq "-1")
+			{
+			# The type totals to -1 as expected.  Let's make sure the
+			# issuer location has been bought.
+			if ($issuer eq "")
+				{
+				# ERROR: Issuer location has not been bought.
+				push @bad_types, $type;
+				}
+			}
+		elsif ($q_total eq "0")
+			{
+			# The type totals to 0.  In this case we expect that nobody
+			# has yet bought the issuer location (which is why the -1
+			# didn't appear during the key scan).
+
+			if ($issuer ne "")
+				{
+				# ERROR: Issuer location has been bought, but we total
+				# to 0.
+				push @bad_types, $type;
+				}
+			}
+		else
+			{
+			push @bad_types, $type;
+			}
+		}
 	}

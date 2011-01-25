@@ -25,7 +25,8 @@ sub new
 	return $s;
 	}
 
-# LATER 0331 experimenting with monitoring size in web transactions
+# LATER 0331 experimenting with monitoring size in web transactions.  We can
+# use this to put an upper bound on the memory used in a transaction.
 
 sub get
 	{

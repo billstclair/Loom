@@ -305,20 +305,20 @@ EOM
 
 	$table .= <<EOM;
 <tr>
-<td class=wallet_small_border align=right>
+<td class=wallet_small_clean align=right>
 <span style='color:green'>choices:</span>
 </td>
-<td class=wallet_bold_border align=right>
+<td class=wallet_bold_clean align=right>
 Time (UTC)
 </td>
-<td class=wallet_bold_border align=right>
+<td class=wallet_bold_clean align=right>
 <span style='margin-right:11px'>Quantity</span>
 </td>
-<td class=wallet_bold_border align=left>
+<td class=wallet_bold_clean align=left>
 <span style='margin-right:14px'>Asset</span>
 </td>
-<td class=wallet_bold_border align=left>
-<span style='margin-right:8px'>To/From Contact</span>
+<td class=wallet_bold_clean align=left>
+<span style='margin-right:8px'>Contact</span>
 </td>
 </tr>
 
@@ -529,17 +529,17 @@ EOM
 
 	$table .= <<EOM;
 <tr>
-<td class=wallet_small_border>
+<td class=wallet_small_clean>
 </td>
-<td class=wallet_bold_border align=right>
+<td class=wallet_bold_clean align=right>
 History
 </td>
-<td class=wallet_small_border>
+<td class=wallet_small_clean>
 $link_enable
 </td>
-<td class=wallet_small_border>
+<td class=wallet_small_clean>
 </td>
-<td class=wallet_small_border align=right>
+<td class=wallet_small_clean align=right>
 </td>
 </tr>
 
@@ -836,6 +836,16 @@ sub handle_move_assets
 
 	my $format = Loom::Qty->new;
 	$qty = $format->float_to_int($qty,$scale);
+
+	if ($type eq "")
+		{
+		# This catches when you enter a valid quantity but don't choose an
+		# asset type.  Maybe later we can clean this up a bit.
+
+		$out->put("status","fail");
+		$out->put("error_move","Please choose an asset.");
+		return;
+		}
 
 	if ($qty eq "")
 		{

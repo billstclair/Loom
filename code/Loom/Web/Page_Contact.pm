@@ -99,11 +99,12 @@ sub page_contact_list
 	my $url = $site->url($op->slice("function"),
 		action => "accept",
 		$op->slice("session"));
-	my $label = "Accept an invitation someone sent to you.";
+	my $label = "Accept an invitation that someone sent to you.";
 	$link_accept = qq{<a href="$url">$label</a>};
 	}
 
 	$table .= <<EOM;
+<h1> Contact List </h1>
 <p>
 $link_invite
 <p>
@@ -114,8 +115,8 @@ $link_accept
 </colgroup>
 
 <tr>
-<td class=wallet_bold_border valign=bottom>
-Your Contacts
+<td class=wallet_bold_clean valign=bottom>
+Click a name in the list below to view or edit a contact.
 </td>
 </tr>
 EOM
@@ -131,13 +132,15 @@ EOM
 	next if $loc_name =~ /^\002/;  # skip outbound cash locations
 
 	my $q_loc_name = $s->{html}->quote($loc_name);
-	$q_loc_name = "<b>$q_loc_name</b>" if $loc eq $loc_folder;
 
 	my $url = $site->url(function => $op->get("function"),
 		name => $loc_name, session => $op->get("session"));
 
 	$q_loc_name =
 	qq{<a href="$url" title="View or edit this contact.">$q_loc_name</a>};
+
+	$q_loc_name .= " &mdash; Your own assets are stored here."
+		if $loc eq $loc_folder;
 
 	my $row_color = $odd_row ? $odd_color : $even_color;
 	$odd_row = 1 - $odd_row;
@@ -167,6 +170,8 @@ sub help
 	my $site = $s->{folder}->{site};
 	my $op = $site->{op};
 
+	# LATER perhaps a standard Print link for printer-friendly versions of
+	# all pages.
 	$site->{printer_friendly} = 1 if $op->get("print");
 
 	$s->{menu} = "help";
@@ -550,11 +555,6 @@ $link_delete
 EOM
 	}
 
-	{
-	$site->{body} .= <<EOM;
-<h2>Current status</h2>
-EOM
-
 	if ($num_items > 0)
 	{
 	$site->{body} .= <<EOM;
@@ -570,18 +570,7 @@ This contact contains no assets.
 EOM
 	}
 
-	}
-
 	$site->{body} .= $table;
-
-	{
-	my $url = $site->url($op->slice("function","name","session"));
-	my $link_refresh = qq{<a href="$url">Refresh current status.</a>};
-	$site->{body} .= <<EOM;
-<p>
-$link_refresh
-EOM
-	}
 
 	$site->{body} .= <<EOM;
 <h2>Contact ID</h2>
@@ -600,7 +589,10 @@ EOM
 	$site->{body} .= <<EOM;
 The identifier of this contact is:
 
-<p class=large_mono style='padding-left:20px' title="Copy and paste into web site to make a payment.">$loc</p>
+<p class=mono style='margin:20px; color:green; font-weight:bold' title="Copy and paste into web site to make a payment.">$loc</p>
+
+<p>
+To share that ID with someone else, copy and paste it into a secure message.
 
 <p>
 Typically you will share this ID with only <em>one</em> other user, who will
@@ -954,7 +946,7 @@ EOM
 	$s->{menu} = "accept";
 
 	$site->{body} .= <<EOM;
-<h1>Accept an invitation someone sent to you.</h1>
+<h1>Accept an invitation that someone sent to you.</h1>
 EOM
 	}
 	else

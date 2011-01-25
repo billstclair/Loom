@@ -265,10 +265,16 @@ sub respond
 		{
 		$context->put("usage",$op->get("usage"));
 		}
+
 	if (!$op->get("change_loc"))
 		{
 		$context->put("loc",$op->get("loc"));
 		}
+
+	# I need this flag to detect if a button was pressed, because query
+	# parameters such as "change_loc" can stay around in the URL.
+
+	$context->put("pressed_button",1);
 
 	# LATER I have noticed a diff between upload and edit on certain files.
 
@@ -408,8 +414,6 @@ EOM
 		);
 	}
 
-	# LATER after you do a change location or usage, close the field.
-
 	my $link_change_loc = $site->highlight_link(
 		$site->url(function => $function,
 			change_loc => 1,
@@ -475,7 +479,7 @@ EOM
 
 EOM
 
-	if ($op->get("change_loc"))
+	if ($op->get("change_loc") && !$op->get("pressed_button"))
 	{
 	$site->set_focus("loc");
 
@@ -494,7 +498,7 @@ Change Location:
 EOM
 	}
 
-	if ($op->get("change_usage"))
+	if ($op->get("change_usage") && !$op->get("pressed_button"))
 	{
 	$site->set_focus("usage");
 

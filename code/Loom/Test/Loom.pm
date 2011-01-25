@@ -3,6 +3,7 @@ use strict;
 use Loom::Test::Crypt;
 use Loom::Test::File;
 use Loom::Test::Grid;
+use Loom::Test::Qty;
 use Loom::Test::Random;
 use Loom::Test::SHA256;
 
@@ -34,6 +35,7 @@ sub run
 
 	$s->check_dependencies;
 
+	Loom::Test::Qty->new->run;
 	Loom::Test::Format->new->run;
 	Loom::Test::Crypt->new->run;
 	Loom::Test::Random->new->run;
@@ -41,10 +43,6 @@ sub run
 	Loom::Test::Grid->new({embedded => 1})->run;
 
 	# Test concurrent file operations with many processes.
-
-	# LATER 0318 After we actually port the current GNU DB over to individual
-	# files, I'll write a massively parallel test suite for API operations
-	# themselves, in addition to this raw file test.
 
 	{
 	my $arena =

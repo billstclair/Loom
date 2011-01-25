@@ -55,6 +55,20 @@ sub touch
 	return $s->{api}->{rsp}->get("content");
 	}
 
+sub look
+	{
+	my $s = shift;
+	my $hash = shift;
+
+	$s->{api}->run(
+		function => "archive",
+		action => "look",
+		hash => $hash,
+		);
+
+	return $s->{api}->{rsp}->get("content");
+	}
+
 sub write
 	{
 	my $s = shift;
@@ -172,6 +186,23 @@ EOM
 	return $content;
 	}
 
+sub is_vacant
+	{
+	my $s = shift;
+	my $loc = shift;
+
+	$s->{api}->run(
+		function => "archive",
+		action => "touch",
+		loc => $loc,
+		);
+
+	my $rsp = $s->{api}->{rsp};
+
+	return ($rsp->get("status") eq "fail"
+		&& $rsp->get("error_loc") eq "vacant");
+	}
+
 sub random_vacant_location
 	{
 	my $s = shift;
@@ -186,20 +217,7 @@ sub random_vacant_location
 		die if $count >= 1000;
 
 		my $loc = unpack("H*",$random->get);
-
-		$s->{api}->run(
-			function => "archive",
-			action => "touch",
-			loc => $loc,
-			);
-
-		my $rsp = $s->{api}->{rsp};
-
-		if ($rsp->get("status") eq "fail"
-			&& $rsp->get("error_loc") eq "vacant")
-			{
-			return $loc;
-			}
+		return $loc if $s->is_vacant($loc);
 		}
 	}
 

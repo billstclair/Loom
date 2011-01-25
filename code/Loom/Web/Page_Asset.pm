@@ -23,7 +23,7 @@ sub respond
 	my $site = $s->{folder}->{site};
 	my $op = $site->{op};
 
-	$site->set_title("Asset Types");
+	$site->set_title("Assets");
 
 	$s->{menu} = "main";
 
@@ -90,7 +90,7 @@ sub page_asset_list
 	my $url = $site->url($op->slice("function"),
 		action => "accept",
 		$op->slice("session"));
-	my $label = "Accept an existing asset type into your wallet.";
+	my $label = "Accept an existing asset into your wallet.";
 	$link_accept = qq{<a href="$url">$label</a>};
 	}
 
@@ -98,11 +98,12 @@ sub page_asset_list
 	my $url = $site->url($op->slice("function"),
 		action => "create",
 		$op->slice("session"));
-	my $label = "Create a brand new asset type which you issue.";
+	my $label = "Create a brand new asset which you issue.";
 	$link_create = qq{<a href="$url">$label</a>};
 	}
 
 	$table .= <<EOM;
+<h1> Asset List </h1>
 <p>
 $link_accept
 <p>
@@ -113,8 +114,8 @@ $link_create
 </colgroup>
 
 <tr>
-<td class=wallet_bold_border valign=bottom>
-Your Asset Types
+<td class=wallet_bold_clean valign=bottom>
+Click a name in the list below to view or edit an asset.
 </td>
 </tr>
 EOM
@@ -186,7 +187,7 @@ then right-click Copy, then right-click Paste into the Description field.)
 
 <h1> Why must I add assets to my wallet? </h1>
 <p>
-Loom users are creating new asset types all the time.  Most of these you will
+Loom users are creating new assets all the time.  Most of these you will
 never hear about.  But when you <em>do</em> hear about an asset and decide to
 transact in it, you must add that asset to your wallet so it can recognize it.
 Otherwise you will never see that asset, even if someone tries to give some
@@ -210,8 +211,8 @@ trust asset descriptions recommended to you by strangers or even friends
 without first checking with an authoritative source.
 <p>
 It is <span class=alarm>your responsibility</span> to avoid accepting a
-counterfeit asset type.  For example, let's say that an online florist
-has issued an asset type which they call "Flower Petals," and they accept
+counterfeit asset.  For example, let's say that an online florist
+has issued an asset which they call "Flower Petals," and they accept
 this as payment for flower deliveries.  The company documents the asset on
 their web site as:
 
@@ -338,7 +339,7 @@ EOM
 		}
 
 		$site->{body} .= <<EOM;
-<h1>Asset Type: $q_type_name</h1>
+<h1>Asset: $q_type_name</h1>
 <p>
 Enter the new name you would like to use for this asset:
 <form method=post action="" autocomplete=off>
@@ -490,7 +491,7 @@ EOM
 	}
 
 	$site->{body} .= <<EOM;
-<h1>Asset Type: $q_type_name</h1>
+<h1>Asset: $q_type_name</h1>
 EOM
 
 	if ($s->{menu} eq "zoom")
@@ -560,7 +561,7 @@ EOM
 	if ($has_assets)
 	{
 	$site->{body} .= <<EOM;
-If you insist on deleting this asset type, you risk <span class=alarm>losing</span>
+If you insist on deleting this asset, you risk <span class=alarm>losing</span>
 all of the assets below.
 EOM
 	}
@@ -591,35 +592,22 @@ EOM
 
 	# LATER maybe single out the issuer case specially.
 
-	$site->{body} .= <<EOM;
-<h2>Current status</h2>
-EOM
-
 	if ($has_assets)
 	{
 	$site->{body} .= <<EOM;
 <p>
-You have this asset type at these contact points:
+You have this asset at these contact points:
 EOM
 	}
 	else
 	{
 	$site->{body} .= <<EOM;
 <p>
-You do not have this asset type at any contact points.
+You do not have this asset at any contact points.
 EOM
 	}
 
 	$site->{body} .= $table;
-
-	{
-	my $url = $site->url($op->slice("function","name","session"));
-	my $link_refresh = qq{<a href="$url">Refresh current status.</a>};
-	$site->{body} .= <<EOM;
-<p>
-$link_refresh
-EOM
-	}
 
 	# Display the asset description string.
 	{
@@ -641,7 +629,7 @@ EOM
 If you need to exchange this asset with a friend who has not yet accepted it
 into his own wallet, send him this description:
 
-<p class=mono style='margin-left:40px; color:#FAD805' title="Double-click, Copy and Paste this into a message">
+<p class=mono style='margin:20px; color:green; font-weight:bold' title="Double-click, Copy and Paste this into a message">
 $description
 </p>
 
@@ -703,7 +691,7 @@ sub page_add_asset
 	}
 
 	$entry_form = <<EOM;
-<h1> Accept an existing asset type into your wallet. </h1>
+<h1> Accept an existing asset into your wallet. </h1>
 Copy and paste the asset description into the field below and press Save.
 <form method=post action="" autocomplete=off>
 $hidden
@@ -1277,9 +1265,9 @@ EOM
 	else
 	{
 	$edit_form .= <<EOM;
-<h1> Create a brand new asset type which you issue. </h1>
+<h1> Create a brand new asset which you issue. </h1>
 <p>
-Here you may create a brand new asset type that has never been seen before.
+Here you may create a brand new asset that has never been seen before.
 You become the sole issuer of the new asset, paying it into existence!
 <p>
 After you create the asset, you will see a <em>negative</em> balance on the
@@ -1292,7 +1280,7 @@ At all times the size of your negative balance will equal the total quantity
 of the asset held by all others in the system.  That way, you will always know
 how much is "out there" (currently issued).
 <p>
-<h2>Enter the new asset type details here:</h2>
+<h2>Enter the new asset details here:</h2>
 EOM
 	}
 
@@ -1340,7 +1328,7 @@ EOM
 <td style='padding-bottom:15px'>
 EOM
 	$edit_form .= <<EOM if $flavor ne "edit";
-Here we have conveniently inserted a random ID for the new asset type.
+Here we have conveniently inserted a random ID for the new asset.
 EOM
 	$edit_form .= <<EOM;
 </td>
@@ -1361,7 +1349,7 @@ $q_error_name
 <tr>
 <td></td>
 <td style='padding-bottom:15px'>
-Enter a nickname for the asset type.
+Enter a nickname for the asset.
 </td>
 </tr>
 

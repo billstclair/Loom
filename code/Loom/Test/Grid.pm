@@ -105,6 +105,15 @@ sub qualify_grid
 
 	# Starting with a brand new empty grid here.
 
+	# Try buying a location in the initial state with a usage location other
+	# than zero.
+
+	$s->check(
+		$s->buy("type_usage","zero","A"),
+		status => "fail",
+		usage_balance => "",
+		);
+
 	# Buy the zero location of asset type zero (usage tokens), paying for
 	# the operation at location zero.  This is the first operation in any
 	# new grid.
@@ -193,6 +202,13 @@ sub qualify_grid
 		status => "success",
 		value_orig => "-1",
 		value_dest => "0",
+		);
+	
+	# Try buying location E with a vacant usage location A.
+
+	$s->check(
+		$s->buy("type_usage","E","A"),
+		status => "fail",
 		);
 
 	# Buy usage location E.  Because we pay for this one directly from the

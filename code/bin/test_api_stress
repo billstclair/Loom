@@ -1,0 +1,146 @@
+#!/usr/bin/perl -w
+use strict;
+
+# This program runs a bunch of processes that all use the API to move a usage
+# token back and forth between two locations.  This tests contention in a very
+# busy system, deliberately causing commit failures and retries in
+# Loom::Web::Main.
+
+use FindBin;
+my $TOP;
+BEGIN { $TOP = "$FindBin::RealBin/../.." }
+
+use lib "$TOP/code";
+
+use kv;
+use loom_api;
+use Loom::File;
+use Loom::Random;
+
+my $g_config;
+
+# Get the value of a required configuration parameter.
+sub config
+	{
+	my $key = shift;
+
+	if (!defined $g_config)
+		{
+		my $text = Loom::File->new("$TOP/data/conf/test_api_stress")->get;
+		die if !defined $text;
+		$g_config = kv::text_to_hash($text);
+		}
+
+	my $val = $g_config->{$key};
+	return $val if defined $val;
+
+	die qq{missing config param "$key"\n};
+	}
+
+sub balance
+	{
+	my $loc = shift;
+
+	my $server_name = config("server");
+	my $type = config("type");
+
+	my $hash = loom_api::get_hash(
+	"$server_name/?function=grid&action=touch&type=$type&loc=$loc");
+
+	return $hash->{value};
+	}
+
+sub run_child
+	{
+	# You *must* seed it here otherwise all the numbers are the same.
+	srand( Loom::Random->new->get_ulong );
+
+	my $qty = rand() > 0.5 ? 1 : -1;
+
+	my $server_name = config("server");
+	my $type = config("type");
+	my $loc_A = config("loc_A");
+	my $loc_B = config("loc_B");
+
+	my $hash = loom_api::get_hash(
+	"$server_name/?function=grid&action=move&type=$type"
+		."&qty=$qty"
+		."&orig=$loc_A"
+		."&dest=$loc_B");
+
+	if ($hash->{status} eq "success")
+		{
+		my $total = $hash->{value_orig} + $hash->{value_dest};
+		printf "Moved %2d units:  A = %4d B = %4d total = %4d\n",
+			$qty, $hash->{value_orig}, $hash->{value_dest}, $total;
+		}
+	else
+		{
+		print "The move of $qty units failed.\n";
+		}
+	}
+
+sub spawn_children
+	{
+	my $count = shift;
+
+	print "Spawn $count children\n";
+
+	for my $child_no (1 .. $count)
+		{
+		my $child = fork();
+
+		if (defined $child && $child == 0)
+			{
+			run_child();
+			exit;
+			}
+
+		if (!defined $child)
+			{
+			die "Too many children! (Only spawned ".($child_no-1).")\n";
+			}
+		}
+	}
+
+sub wait_children
+	{
+	while (1)
+		{
+		my $child = waitpid(-1, 0);
+		last if $child <= 0;
+
+		# Child process $child just finished.
+		}
+	}
+
+sub show_balances
+	{
+	my $loc_A = config("loc_A");
+	my $loc_B = config("loc_B");
+
+	my $A = balance($loc_A);
+	my $B = balance($loc_B);
+
+	my $total = $A + $B;
+
+	print <<EOM;
+  A     = $A
+  B     = $B
+  total = $total
+EOM
+	}
+
+sub main
+	{
+	print "BEFORE:\n";
+	show_balances();
+
+	spawn_children(20);
+	wait_children();
+
+	print "AFTER:\n";
+	show_balances();
+	}
+
+main();

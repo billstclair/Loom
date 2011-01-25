@@ -1,0 +1,74 @@
+Loom Version 104 <https://loom.cc>
+Written by Patrick Chkoreff
+
+Loom is a open source web server.  All code in this directory is subject to the
+license conditions described in the "NOTICE" file.
+
+Loom provides two basic concepts known as the "Grid" and the "Archive".  In
+short:
+
+	The Grid is a two-dimensional array of integers.
+	The Archive is a one-dimensional array of strings.
+
+These arrays are huge, with 128-bit row and column numbers in the range 0
+through 2^128-1.
+
+The server has a standard API (Application Programming Interface) for
+manipulating these arrays, allowing fully independent developers to create
+their own applications and user interfaces.
+
+The server also has a "Wallet" interface built on top of the Grid and Archive,
+allowing users to log into the web site, create new asset types, and spend them
+around freely in a cash-like manner.
+
+The server does not do SSL (Secure Socket Layer) by itself.  For that, you need
+to run it behind the "pound" front-end, which handles all the SSL and then
+communicates with the Loom back-end in simple plain text.  See
+http://www.apsis.ch/pound/ for details.
+
+
+= NOTES ON PORTING DATA (2011-01-01)
+
+On 2011-01-01 I released a new version of the code which uses the file system
+for all data storage, with no central locks, instead of a GNU DB file with a
+central lock.  Here is the procedure I used to ensure a correct and orderly
+transition.
+
+Shut down server:
+
+	loom -n
+
+Install new code.
+
+Port the GNU DB to the new file system based data store:
+
+	port_data
+
+Now check the old DB:
+
+	old_audit_loom -s >tmp1
+
+And check the new DB:
+
+	audit_loom -s >tmp2
+
+The files should be the same, except that tmp2 will have an extra message
+about type zero.
+
+	diff tmp1 tmp2
+	rm tmp1 tmp2
+
+Run the self-test:
+
+	test_loom
+
+Start the server:
+
+	loom -y
+
+Now we'll run the stress test for the API.  First you may have to configure the
+data/conf/test_api_stress file and pre-populate the two locations with usage
+tokens.  Then run:
+
+	test_api_stress
+

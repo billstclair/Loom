@@ -18,22 +18,10 @@ use lib "$TOP/code";
 use Getopt::Long;
 use Loom::Digest::File;
 
-main->new($TOP)->run;
+main();
 
-sub new
+sub main
 	{
-	my $class = shift;
-	my $TOP = shift;
-
-	my $s = bless({},$class);
-	$s->{TOP} = $TOP;
-	return $s;
-	}
-
-sub run
-	{
-	my $s = shift;
-
 	my $opt = {};
 
 	my $ok = GetOptions($opt, "l");
