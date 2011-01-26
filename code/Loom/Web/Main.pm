@@ -409,6 +409,41 @@ sub dispatch
 		$s->object("Loom::Web::Page_Std",$s,
 			$s->{config}->get("faq_page"), "FAQ")->respond;
 		}
+	elsif ($name eq "random")
+		{
+		my $id = unpack("H*",$s->{random}->get);
+
+		my $api = Loom::Context->new;
+		$api->put("function",$name);
+		$api->put("value",$id);
+
+		my $response_code = "200 OK";
+		my $headers = "Content-type: text/plain\n";
+		my $result = $api->write_kv;
+
+		$s->format_HTTP_response($response_code,$headers,$result);
+		}
+	elsif ($name eq "hash")
+		{
+		my $api = Loom::Context->new;
+		$api->put("function",$name);
+
+		my $input = $op->get("input");
+
+		my $hash = $s->{login}->{hasher}->sha256($input);
+		my $id = substr($hash,0,16) ^ substr($hash,16,16);
+		$id = unpack("H*",$id);
+
+		$api->put("input",$input);
+		$api->put("sha256_hash",unpack("H*",$hash));
+		$api->put("folded_hash",$id);
+
+		my $response_code = "200 OK";
+		my $headers = "Content-type: text/plain\n";
+		my $result = $api->write_kv;
+
+		$s->format_HTTP_response($response_code,$headers,$result);
+		}
 	else
 		{
 		$s->page_not_found;
