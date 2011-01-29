@@ -25,9 +25,6 @@ sub new
 	return $s;
 	}
 
-# LATER 0331 experimenting with monitoring size in web transactions.  We can
-# use this to put an upper bound on the memory used in a transaction.
-
 sub get
 	{
 	my $s = shift;
@@ -66,6 +63,10 @@ sub put
 	$s->{size} += length($val) - $old_len;
 	return;
 	}
+
+# Return the current size (memory footprint) of the transaction.  This is
+# used to enforce an upper bound on memory usage, avoiding one possible Denial
+# of Service attack.
 
 sub size
 	{

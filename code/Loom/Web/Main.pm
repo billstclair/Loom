@@ -121,14 +121,32 @@ sub respond
 
 			$s->dispatch;  # This handles the message.
 
-			last if $s->{transaction_in_progress};  # Don't commit yet.
+			if ($s->{transaction_in_progress})
+				{
+				# Set the maximum transaction size allowed.
+				my $max_size = 2097152; # 2^21 bytes (2 MiB)
 
-			last if $s->{db}->commit;
+				# Get the current size by punching through the Adapt layer.
+				my $cur_size = $s->{db}->{db}->size;
 
-			# Commit failed because some data changed under our feet.
-			# Loop back around and handle the same message again.
+				if ($cur_size > $max_size)
+					{
+					$s->transaction_too_large;
+					}
 
-			#print "$$ commit failed let's retry\n";
+				last;
+				}
+			elsif ($s->{db}->commit)
+				{
+				last;
+				}
+			else
+				{
+				# Commit failed because some data changed under our feet.
+				# Loop back around and handle the same message again.
+
+				#print "$$ commit failed let's retry\n";
+				}
 			}
 
 		# Now that we have successfully read a message from the client, handled
@@ -362,10 +380,10 @@ sub dispatch
 		{
 		$s->object("Loom::Web::Page_Archive_API",$s)->respond;
 		}
-	#elsif ($name eq "trans" || $name eq "trans_web")
-	#	{
-	#	$s->do_api;
-	#	}
+	elsif ($name eq "trans" || $name eq "trans_web")
+		{
+		$s->do_api;
+		}
 	elsif ($name eq "view")
 		{
 		$s->object("Loom::Web::Page_View",$s)->respond;
@@ -452,9 +470,6 @@ sub dispatch
 	return;
 	}
 
-# LATER 1218 This is disabled for now because we still need to put an upper
-# bound on the memory used in a transaction.  (See Loom::DB::Trans.)
-#
 # The transactional API is:
 #
 #    /trans/begin
@@ -884,18 +899,43 @@ sub page_not_found
 Content-type: text/html
 
 <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
-<HTML><HEAD>
-<TITLE>404 Not Found</TITLE>
-</HEAD><BODY>
-<H1>Not Found</H1>
-The requested URL was not found on this server.<P>
-</BODY></HTML>
+<html>
+<head> <title>404 Not Found</title> </head>
+<body>
+<h1>Not Found</h1>
+The requested URL was not found on this server.
+</body>
+</html>
 EOM
 
 	$s->page_HTTP("404 Not Found",$page);
 
 	$s->{client}->disconnect;
 
+	return;
+	}
+
+sub transaction_too_large
+	{
+	my $s = shift;
+
+	my $page = <<EOM;
+Content-type: text/html
+
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<html>
+<head> <title>413 Transaction Too Large</title> </head>
+<body>
+<h1>Transaction Too Large</h1>
+Your request was too large for the server to store in memory safely.
+</body>
+</html>
+EOM
+
+	$s->page_HTTP("413 Request Entity Too Large", $page);
+	$s->{db}->cancel;
+	$s->{transaction_in_progress} = 0;
+	$s->{client}->disconnect;
 	return;
 	}
 

@@ -39,13 +39,15 @@ sub respond
 	$s->{archive} = Loom::Web::EZ_Archive->new($site->{loom});
 	$s->{grid} = Loom::Web::EZ_Grid->new($site->{loom});
 
-	# LATER 0318 The next goal is the atomic API, with parallel update, commit,
-	# loop, all that.  That way we can do a series of individual operations
-	# and they'll all be committed at once, with no effect if any one of them
-	# fails.  For example, updating the session id in the archive requires two
-	# writes.  Those should be atomic.
+	# LATER 012911 You'll need to bracket the folder operations in trans/begin
+	# and trans/commit.  In particular, updating the session id in the archive
+	# requires two writes.  Those should be atomic.  This currently doesn't
+	# matter, primarily because the wallet code is not doing its operations
+	# "over the wire" yet (i.e., it's using an entirely local API).  But if
+	# you do run the wallet interface from a remote client, you should use
+	# the transaction mechanism to be truly safe.
 
-	# LATER 0318 make the entire server completely self-configuring upon
+	# LATER 031810 make the entire server completely self-configuring upon
 	# installation.
 
 	my $op = $site->{op};
