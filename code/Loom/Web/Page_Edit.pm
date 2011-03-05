@@ -379,14 +379,14 @@ EOM
 	$dsp_status = "<span style='color:$color'>$msg</span>";
 	}
 
-	# Now take a look at the Content-type to see if we should enable editing
+	# Now take a look at the Content-Type to see if we should enable editing
 	# in a text box.
 
 	my ($header_op,$header_text,$payload) =
 		$site->split_content($op->get("content"));
 
-	my $content_type = $header_op->get("Content-type");
-	$content_type = $header_op->get("Content-Type") if $content_type eq "";
+	my $content_type = $header_op->get("Content-Type");
+	$content_type = $header_op->get("Content-type") if $content_type eq "";
 
 	my $len_content = length($op->get("content"));
 	my $guard = unpack("H*",$s->{hasher}->sha256($op->get("content")));
@@ -658,7 +658,7 @@ sub full_uploaded_content
 
 		if ($content_type ne "")
 			{
-			$inferred_header = "Content-type: $content_type\n\n"
+			$inferred_header = "Content-Type: $content_type\n\n"
 			}
 		}
 

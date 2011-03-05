@@ -115,6 +115,9 @@ sub respond
 		# If the commit fails it loops back again and replays the request,
 		# reading the same message bytes we read the first time.
 
+		my $max_commit_failure = 1000;
+		my $count_commit_failure = 0;
+
 		while (1)
 			{
 			return if !$s->{http}->read_complete_message;
@@ -144,8 +147,20 @@ sub respond
 				{
 				# Commit failed because some data changed under our feet.
 				# Loop back around and handle the same message again.
+				# We impose a limit on number of failures.  It could
+				# be that we failed because too many files were open, or
+				# some other error besides read inconsistency.
 
-				#print "$$ commit failed let's retry\n";
+				$count_commit_failure++;
+
+				#print "$$ ($count_commit_failure/$max_commit_failure) "
+				#	."commit failed let's retry\n";
+
+				if ($count_commit_failure >= $max_commit_failure)
+					{
+					$s->transaction_conflict;
+					last;
+					}
 				}
 			}
 
@@ -154,6 +169,7 @@ sub respond
 		# response to the client.
 
 		$s->render_page;
+
 		$s->{client}->send($s->{response_text});
 
 		return if $s->{client}->exiting;
@@ -412,21 +428,6 @@ sub dispatch
 		{
 		$s->object("Loom::Web::Page_Test",$s)->respond;
 		}
-	elsif ($name eq "news")
-		{
-		$s->object("Loom::Web::Page_Std",$s,
-			$s->{config}->get("news_page"),"News")->respond;
-		}
-	elsif ($name eq "merchants")
-		{
-		$s->object("Loom::Web::Page_Std",$s,
-			$s->{config}->get("merchants_page"), "Merchants")->respond;
-		}
-	elsif ($name eq "faq")
-		{
-		$s->object("Loom::Web::Page_Std",$s,
-			$s->{config}->get("faq_page"), "FAQ")->respond;
-		}
 	elsif ($name eq "random")
 		{
 		my $id = unpack("H*",$s->{random}->get);
@@ -436,7 +437,7 @@ sub dispatch
 		$api->put("value",$id);
 
 		my $response_code = "200 OK";
-		my $headers = "Content-type: text/plain\n";
+		my $headers = "Content-Type: text/plain\n";
 		my $result = $api->write_kv;
 
 		$s->format_HTTP_response($response_code,$headers,$result);
@@ -457,17 +458,61 @@ sub dispatch
 		$api->put("folded_hash",$id);
 
 		my $response_code = "200 OK";
-		my $headers = "Content-type: text/plain\n";
+		my $headers = "Content-Type: text/plain\n";
 		my $result = $api->write_kv;
 
 		$s->format_HTTP_response($response_code,$headers,$result);
 		}
 	else
 		{
-		$s->page_not_found;
+		my $id = $s->{config}->get("link/$name");
+		if ($id eq "")
+			{
+			$s->page_not_found;
+			}
+		else
+			{
+			$s->interpret_archive_slot($id);
+			}
 		}
 
 	return;
+	}
+
+sub interpret_archive_slot
+	{
+	my $s = shift;
+	my $id = shift;
+
+	my $content = $s->archive_get($id);
+	$content = "" if !defined $content;
+
+	my ($header_op,$header_text,$payload) = $s->split_content($content);
+
+	my $content_type = $header_op->get("Content-Type");
+	$content_type = $header_op->get("Content-type")
+		if $content_type eq "";
+
+	if ($content_type eq "standard-page")
+		{
+		my $title = $header_op->get("Title");
+		$s->set_title_literal($title);
+		$s->{body} .= $payload;
+
+		push @{$s->{top_links}},
+			$s->highlight_link(
+				$s->url,
+				"Home");
+
+		push @{$s->{top_links}},
+			$s->highlight_link(
+				$s->url($s->{op}->slice("function")),
+				$s->{title}, 1);
+		}
+	else
+		{
+		$s->page_not_found;
+		}
 	}
 
 # The transactional API is:
@@ -523,7 +568,7 @@ sub do_api
 		{
 		# Return result in KV format.
 		my $response_code = "200 OK";
-		my $headers = "Content-type: text/plain\n";
+		my $headers = "Content-Type: text/plain\n";
 		my $text = $api->write_kv;
 		$s->format_HTTP_response($response_code,$headers,$text);
 		}
@@ -655,7 +700,7 @@ sub render_page
 	}
 
 	my $system_name = $s->{config}->get("system_name");
-	my $title = "$system_name $s->{title}";
+	my $title = $s->{title_literal} ? $s->{title} : "$system_name $s->{title}";
 
 	# Conditional javascript keyboard.
 
@@ -695,7 +740,7 @@ $s->{body}
 EOM
 
 	my $response_code = "200 OK";
-	my $headers = "Content-type: text/html\n";
+	my $headers = "Content-Type: text/html\n";
 
 	$s->format_HTTP_response($response_code,$headers,$payload);
 	}
@@ -763,7 +808,7 @@ sub top_navigation_bar
 	my $top_links = $s->{top_links};
 	for my $link (@$top_links)
 		{
-		$link = "&nbsp;" if !defined $link || $link eq "";
+		$link = "/" if !defined $link || $link eq "";
 		$dsp_links .= qq{<span style='padding-right:15px'>$link</span>\n};
 		}
 
@@ -896,7 +941,7 @@ sub page_not_found
 	my $s = shift;
 
 	my $page = <<EOM;
-Content-type: text/html
+Content-Type: text/html
 
 <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
 <html>
@@ -920,7 +965,7 @@ sub transaction_too_large
 	my $s = shift;
 
 	my $page = <<EOM;
-Content-type: text/html
+Content-Type: text/html
 
 <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
 <html>
@@ -939,8 +984,33 @@ EOM
 	return;
 	}
 
+sub transaction_conflict
+	{
+	my $s = shift;
+
+	my $page = <<EOM;
+Content-Type: text/html
+
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<html>
+<head> <title>409 Transaction Conflict</title> </head>
+<body>
+<h1>Transaction Conflict</h1>
+Your request was trying to modify data while too many other processes were also
+modifying that same data.  We had to give up, but you can try again later.
+</body>
+</html>
+EOM
+
+	$s->page_HTTP("409 Conflict", $page);
+	$s->{db}->cancel;
+	$s->{transaction_in_progress} = 0;
+	$s->{client}->disconnect;
+	return;
+	}
+
 # See if the page has any content headers.  If so, don't change anything.  If
-# not, put Content-type: text/plain on the front so it renders properly.
+# not, put Content-Type: text/plain on the front so it renders properly.
 
 sub page_HTTP
 	{
@@ -953,7 +1023,7 @@ sub page_HTTP
 	if ($headers eq "")
 		{
 		# No headers, use text/plain by default.
-		$headers = "Content-type: text/plain\n";
+		$headers = "Content-Type: text/plain\n";
 		}
 
 	$s->format_HTTP_response($response_code,$headers,$content);
@@ -1045,7 +1115,21 @@ sub split_content
 sub set_title
 	{
 	my $s = shift;
-	$s->{title} = shift;
+	my $title = shift;
+
+	$s->{title} = $s->{html}->quote($title);
+	$s->{title_literal} = 0;
+	return;
+	}
+
+sub set_title_literal
+	{
+	my $s = shift;
+	my $title = shift;
+
+	$s->{title} = $s->{html}->quote($title);
+	$s->{title_literal} = 1;
+	return;
 	}
 
 sub set_focus
@@ -1140,7 +1224,7 @@ sub showing_maintenance_page
 	my $system_name = $s->{config}->get("system_name");
 
 	my $page = <<EOM;
-Content-type: text/html
+Content-Type: text/html
 
 <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
 <HTML><HEAD>

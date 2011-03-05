@@ -164,14 +164,15 @@ sub respond
 	$s->{location} = $s->{archive}->touch($real_session);
 	$s->{object} = $s->{archive}->touch_object($s->{location});
 
-	my $content_type = $s->{object}->get("Content-type");
+	my $content_type = $s->{object}->get("Content-Type");
+	$content_type = $s->{object}->get("Content-type") if $content_type eq "";
 
 	if ($content_type ne "loom/folder")
 	{
 	my $dsp_obj = $s->{html}->quote($s->{object}->write_kv);
 
 	$site->{body} .= <<EOM;
-<h1>Unknown Content-type</h1>
+<h1>Unknown Content-Type</h1>
 <pre>
 $dsp_obj
 </pre>
@@ -387,7 +388,7 @@ EOM
 			{
 			$error = $out->get("error_token");
 			}
-		
+
 		if ($error eq "")
 			{
 			}
@@ -645,13 +646,13 @@ sub configure_value_display
 
 	my $grid = $s->{grid};
 
-	my @list_type = $s->get_sorted_list_type;
+	my @list_type = $s->get_sorted_list_type_enabled;
 
 	if ($display->{flavor} eq "move_dialog")
 		{
 		# Show all non-empty locations.
 
-		my @list_loc = $s->get_sorted_list_loc;
+		my @list_loc = $s->get_sorted_list_loc_enabled;
 
 		$display->{contact_title} = "View contact";
 
@@ -704,7 +705,7 @@ sub configure_value_display
 		{
 		# Show all locations which have something of a given type.
 
-		my @list_loc = $s->get_sorted_list_loc;
+		my @list_loc = $s->get_sorted_list_loc_enabled;
 
 		my $type = $s->map_nickname_to_id("type",$display->{type_name});
 
@@ -815,7 +816,7 @@ sub move_dialog
 	my $s = shift;
 	my $list_select_type = shift;
 	my $list_select_loc = shift;
-	
+
 	my $site = $s->{site};
 
 	my $type_selector = $site->simple_value_selector("type",
@@ -1991,7 +1992,7 @@ sub build_folder_template
 	# parameters.
 
 	{
-	$build->{object}->put("Content-type", "loom/folder");
+	$build->{object}->put("Content-Type", "loom/folder");
 
 	# Build the list of asset types from the invitation url.
 
@@ -2194,6 +2195,34 @@ sub get_sorted_list_type
 		map { [$_, $s->map_id_to_nickname("type",$_)] }
 		@list_type
 		;
+
+	return @result;
+	}
+
+sub get_sorted_list_loc_enabled
+	{
+	my $s = shift;
+
+	my @list = $s->get_sorted_list_loc;
+	my @result;
+	for my $loc (@list)
+		{
+		push @result, $loc if !$s->{object}->get("loc_disable.$loc");
+		}
+
+	return @result;
+	}
+
+sub get_sorted_list_type_enabled
+	{
+	my $s = shift;
+
+	my @list = $s->get_sorted_list_type;
+	my @result;
+	for my $loc (@list)
+		{
+		push @result, $loc if !$s->{object}->get("type_disable.$loc");
+		}
 
 	return @result;
 	}

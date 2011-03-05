@@ -63,9 +63,9 @@ sub data_style_sheet
 	# LATER simplify the wallet styles a bit
 
 	return <<EOM;
-Content-type: text/css
+Content-Type: text/css
 
-body { font-family: verdana, arial, sans-serif; font-size: 10pt; margin:auto; background:#e8f8fe; }
+body { font-family: verdana, arial, sans-serif; font-size: 10pt; margin:auto; background:#efffff; }
 div { font-size:10pt }
 p { font-size:10pt }
 h1 { font-size:12pt }
@@ -121,7 +121,7 @@ sub data_keyboard_png
 	my $s = shift;
 
 	my $data = <<EOM;
-Content-type: image/png
+Content-Type: image/png
 
 \211PNG\015\n\032\n\000\000\000\015IHDR\000\000\000\034\000\000\000\015\010\003\000\000\000\215Y\376\230\000\000\000\004gAMA\000\000\257\3107\005\212\351\000\000\000\031tEXtSoftware\000Adobe ImageReadyq\311e<\000\000\000\014PLTE\000\000\000\300\300\300\377\377\377\200\200\200\374>\2068\000\000\000?IDATx\332\224\216A\n\0000\010\303Z\373\377?\0176\021\006\253\270\320\213\227\030\250\001\n\302\015\"\341\006\241A\021\306z\264\306:\320\276\244\373\231\255\345Gm\221\347][\214j\227\000\003\000#b\001E'\264m\204\000\000\000\000IEND\256B`\202
 EOM
@@ -134,7 +134,7 @@ sub data_keyboard_css
 
 	my $data = "";
 	$data .= <<'EOM';
-Content-type: text/css
+Content-Type: text/css
 
 #keyboardInputMaster {
   position:absolute;

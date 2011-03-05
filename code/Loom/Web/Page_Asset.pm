@@ -102,25 +102,40 @@ sub page_asset_list
 	$link_create = qq{<a href="$url">$label</a>};
 	}
 
+	my $hidden = $s->{html}->hidden_fields(
+		$op->slice(qw(function session)));
+
 	$table .= <<EOM;
 <h1> Asset List </h1>
+These are the asset types which your wallet currently recognizes.
+
 <p>
 $link_accept
 <p>
 $link_create
+<form method=post action="" autocomplete=off>
+$hidden
 <table border=0 cellpadding=1 style='border-collapse:collapse;'>
 <colgroup>
-<col width=650>
+<col width=80>
+<col width=570>
 </colgroup>
 
 <tr>
+<td class=wallet_bold_clean align=center>
+<input class=smaller type=submit name=save_enabled value="Save">
+<br>
+Enabled
+</td>
 <td class=wallet_bold_clean valign=bottom>
-Click a name in the list below to view or edit an asset.
+Name
 </td>
 </tr>
 EOM
 
 	my $context = Loom::Context->new($op->slice(qw(function session)));
+
+	my $save_enabled = $op->get("save_enabled") ne "";
 
 	for my $type (@list_type)
 	{
@@ -136,8 +151,27 @@ EOM
 	my $row_color = $odd_row ? $odd_color : $even_color;
 	$odd_row = 1 - $odd_row;
 
+	my $folder_object = $s->{folder}->{object};
+	my $is_disabled = $folder_object->get("type_disable.$type");
+	my $is_enabled = !$is_disabled;
+
+	if ($save_enabled)
+		{
+		$is_enabled = $op->get("enable_$type") ne "";
+		my $disable_flag = $is_enabled ? "" : "1";
+		$folder_object->put("type_disable.$type",$disable_flag);
+		}
+
+	my $checked = $is_enabled ? " checked" : "";
+
+	my $enable_control =
+	qq{<input$checked type=checkbox name=enable_$type>};
+
 	$table .= <<EOM;
 <tr style='height:28px; background-color:$row_color'>
+<td align=center>
+$enable_control
+</td>
 <td style='padding-left:5px'>
 $q_type_name
 </td>
@@ -147,7 +181,16 @@ EOM
 
 	$table .= <<EOM;
 </table>
+</form>
 EOM
+
+	if ($save_enabled)
+		{
+		my $folder_object = $s->{folder}->{object};
+		my $archive = $s->{folder}->{archive};
+		$archive->write_object($loc_folder,$folder_object,$loc_folder);
+		$s->{folder}->{object} = $archive->touch_object($loc_folder);
+		}
 
 	$site->{body} .= $table;
 
@@ -1027,7 +1070,7 @@ sub do_add_asset
 		$grid->issuer($type,$loc_zero,$loc_folder);
 		$grid->sell($type,$loc_zero,$loc_folder);
 		}
-	
+
 	return $result;
 	}
 

@@ -158,7 +158,10 @@ sub read_complete_message
 			$s->{query} = $2;
 			$s->{query} = "" if !defined $s->{query};
 
-			$s->parse_urlencoded_body($s->{query});
+			if ($s->{method} eq "GET")
+				{
+				$s->parse_urlencoded_body($s->{query});
+				}
 			}
 		}
 	else

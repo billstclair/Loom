@@ -85,7 +85,7 @@ sub respond
 	$site->{loom}->run_op($api);
 
 	my $response_code = "200 OK";
-	my $headers = "Content-type: text/plain\n";
+	my $headers = "Content-Type: text/plain\n";
 	my $result = $api->write_kv;
 
 	$site->format_HTTP_response($response_code,$headers,$result);

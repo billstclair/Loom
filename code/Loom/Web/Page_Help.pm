@@ -956,7 +956,7 @@ expressed in our simple standard "KV" format.
 For example, after the url above is translated and executed, the API will
 send the result back to the caller like this:
 <pre class=mono style='margin-left:20px'>
-Content-type: text/plain
+Content-Type: text/plain
 
 (
 :function

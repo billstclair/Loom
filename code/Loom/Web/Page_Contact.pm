@@ -91,7 +91,7 @@ sub page_contact_list
 		default_include_usage_tokens => "1",
 		$op->slice("session"));
 
-	my $label = "Invite someone to be your contact.";
+	my $label = "Create a brand new contact ID.";
 	$link_invite = qq{<a href="$url">$label</a>};
 	}
 
@@ -99,30 +99,49 @@ sub page_contact_list
 	my $url = $site->url($op->slice("function"),
 		action => "accept",
 		$op->slice("session"));
-	my $label = "Accept an invitation that someone sent to you.";
+
+	my $label = "Accept a contact ID that someone sent to you.";
 	$link_accept = qq{<a href="$url">$label</a>};
 	}
 
+	my $hidden = $s->{html}->hidden_fields(
+		$op->slice(qw(function session)));
+
 	$table .= <<EOM;
 <h1> Contact List </h1>
+These are the contact locations where you may store and move assets.  The first
+contact is the secret location where you store your own personal assets.  The
+other contacts are locations that you can share with someone else, allowing you
+to pay each other through the shared location.
+
 <p>
 $link_invite
 <p>
 $link_accept
+<form method=post action="" autocomplete=off>
+$hidden
 <table border=0 cellpadding=1 style='border-collapse:collapse;'>
 <colgroup>
-<col width=650>
+<col width=80>
+<col width=570>
 </colgroup>
 
 <tr>
-<td class=wallet_bold_clean valign=bottom>
-Click a name in the list below to view or edit a contact.
+<td class=wallet_bold_clean align=center>
+<input class=smaller type=submit name=save_enabled value="Save">
+<br>
+Enabled
+</td>
+<td class=wallet_bold_clean>
+Name
 </td>
 </tr>
 EOM
 
 	my @list_loc = $s->{folder}->get_sorted_list_loc;
 	my $loc_folder = $s->{folder}->{location};
+
+	my $save_enabled = $op->get("save_enabled") ne "";
 
 	for my $loc (@list_loc)
 	{
@@ -139,15 +158,40 @@ EOM
 	$q_loc_name =
 	qq{<a href="$url" title="View or edit this contact.">$q_loc_name</a>};
 
-	$q_loc_name .= " &mdash; Your own assets are stored here."
-		if $loc eq $loc_folder;
-
 	my $row_color = $odd_row ? $odd_color : $even_color;
 	$odd_row = 1 - $odd_row;
 
+	my $enable_control;
+	if ($loc eq $loc_folder)
+		{
+		$enable_control = "";
+		$q_loc_name = "<b>$q_loc_name</b>";
+		}
+	else
+		{
+		my $folder_object = $s->{folder}->{object};
+		my $is_disabled = $folder_object->get("loc_disable.$loc");
+		my $is_enabled = !$is_disabled;
+
+		if ($save_enabled)
+			{
+			$is_enabled = $op->get("enable_$loc") ne "";
+			my $disable_flag = $is_enabled ? "" : "1";
+			$folder_object->put("loc_disable.$loc",$disable_flag);
+			}
+
+		my $checked = $is_enabled ? " checked" : "";
+
+		$enable_control =
+		qq{<input$checked type=checkbox name=enable_$loc>};
+		}
+
 	$table .= <<EOM;
-<tr style='height:28px; background-color:$row_color'>
-<td style='padding-left:5px'>
+<tr style='background-color:$row_color'>
+<td align=center>
+$enable_control
+</td>
+<td style='padding:5px'>
 $q_loc_name
 </td>
 </tr>
@@ -156,7 +200,16 @@ EOM
 
 	$table .= <<EOM;
 </table>
+</form>
 EOM
+
+	if ($save_enabled)
+		{
+		my $folder_object = $s->{folder}->{object};
+		my $archive = $s->{folder}->{archive};
+		$archive->write_object($loc_folder,$folder_object,$loc_folder);
+		$s->{folder}->{object} = $archive->touch_object($loc_folder);
+		}
 
 	$site->{body} .= $table;
 
@@ -196,7 +249,7 @@ Alice does it.  Here are the steps:
 
 <h2> Alice creates a new contact in her wallet </h2>
 <ul>
-<li> Alice clicks Contacts, then Invite.  A brand new random contact ID appears.
+<li> Alice clicks Contacts, then Create.  A brand new random contact ID appears.
 <li> Alice enters the name "Bob" to help her remember who the contact is.
 <li> Alice presses Save.
 </ul>
@@ -622,7 +675,7 @@ EOM
 
 	my $loc = $folder->map_nickname_to_id("loc",$display->{location_name});
 
-	my @list_type = $folder->get_sorted_list_type;
+	my @list_type = $folder->get_sorted_list_type_enabled;
 
 	my $owner_name = $display->{location_name};
 	my $sponsor_name = $folder->map_id_to_nickname("loc",$loc_folder);
@@ -825,7 +878,7 @@ EOM
 		if ($action eq "invite")
 		{
 		$q_error_stanza .= <<EOM;
-Please click the Invite link again to generate a new contact ID.
+Please cancel this operation and try again.
 EOM
 		}
 
@@ -954,7 +1007,7 @@ EOM
 	$s->{menu} = "invite";
 
 	$site->{body} .= <<EOM;
-<h1>Invite someone to be your contact.</h1>
+<h1>Create a brand new contact ID.</h1>
 EOM
 	}
 
@@ -1067,31 +1120,29 @@ EOM
 
 	$table .= <<EOM;
 <tr>
-<td>
-</td>
+<td> </td>
 <td>
 <input type=submit name=save value="Save">
 $link_cancel
 </td>
 </tr>
 
-EOM
-	$table .= <<EOM if $action eq "invite";
 <tr>
-<td></td>
-<td style='padding-bottom:15px'>
-After pressing Save, send the new contact ID to your friend as securely as
-possible.  After he Accepts it into his own wallet, you will be able to
-exchange assets back and forth through this shared contact ID.
-<p>
-You can also create a contact for online shopping.  The contact ID acts like a
-"debit card" which you can copy and paste into a merchant's shopping cart.
+<td colspan=2>
+$q_error_stanza
 </td>
 </tr>
 
 EOM
-	$table .= <<EOM;
+	$table .= <<EOM if $action eq "invite";
 </table>
+<h1> Then What? </h1>
+After pressing Save, send the new contact ID to your friend as securely as
+possible.  When he Accepts it into his own wallet, you will be able to
+exchange assets back and forth through this shared contact ID.
+<p>
+You can also create a contact for online shopping.  The contact ID acts like a
+"debit card" which you can copy and paste into a merchant's shopping cart.
 EOM
 
 	my $hidden = $s->{html}->hidden_fields(
@@ -1101,7 +1152,6 @@ EOM
 <form method=post action="" autocomplete=off>
 $hidden
 $table
-$q_error_stanza
 </form>
 EOM
 

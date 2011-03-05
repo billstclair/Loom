@@ -170,15 +170,19 @@ sub object_text
 	my $s = shift;
 	my $obj = shift;
 
-	my $content_type = $obj->get("Content-type");
+	my $content_type = $obj->get("Content-Type");
+	$content_type = $obj->get("Content-type") if $content_type eq "";
 
-	# Force Content-type to be first line in HTTP format.
+	# Force Content-Type to be first line in HTTP format.
 
-	my $copy = Loom::Context->new($obj->pairs, "Content-type" => "");
+	my $copy = Loom::Context->new($obj->pairs);
+	$copy->put("Content-Type","");
+	$copy->put("Content-type","");
+
 	my $obj_str = $copy->write_kv;
 
 	my $content = <<EOM;
-Content-type: $content_type
+Content-Type: $content_type
 
 $obj_str
 EOM
