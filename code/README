@@ -1,4 +1,5 @@
-Loom Version 110 <https://loom.cc>
+#
+Loom Version 2011.03.18.13.33 <https://loom.cc>
 Written by Patrick Chkoreff
 
 Loom is a open source web server.  All code in this directory is subject to the
@@ -26,49 +27,21 @@ to run it behind the "pound" front-end, which handles all the SSL and then
 communicates with the Loom back-end in simple plain text.  See
 http://www.apsis.ch/pound/ for details.
 
+= NOTES ON TESTING
 
-= NOTES ON PORTING DATA (2011-01-01)
-
-On 2011-01-01 I released a new version of the code which uses the file system
-for all data storage, with no central locks, instead of a GNU DB file with a
-central lock.  Here is the procedure I used to ensure a correct and orderly
-transition.
-
-Shut down server:
-
-	loom -n
-
-Install new code.
-
-Port the GNU DB to the new file system based data store:
-
-	port_data
-
-Now check the old DB:
-
-	old_audit_loom -s >tmp1
-
-And check the new DB:
-
-	audit_loom -s >tmp2
-
-The files should be the same, except that tmp2 will have an extra message
-about type zero.
-
-	diff tmp1 tmp2
-	rm tmp1 tmp2
-
-Run the self-test:
-
-	test_loom
-
-Start the server:
+= To start the server:
 
 	loom -y
 
-Now we'll run the stress test for the API.  First you may have to configure the
-data/conf/test_api_stress file and pre-populate the two locations with usage
-tokens.  Then run:
+= To shut down the server:
 
+	loom -n
+
+= Test programs:
+
+	audit_loom
+	test_api_demo
 	test_api_stress
-
+	test_file
+	test_float
+	test_loom
